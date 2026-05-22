@@ -1,0 +1,168 @@
+-- 1. 创建数据库
+CREATE DATABASE IF NOT EXISTS house_rental_db 
+DEFAULT CHARACTER SET utf8mb4 
+DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE house_rental_db;
+
+-- 2. 用户表（管理员和租客）
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) UNIQUE NOT NULL COMMENT '用户名',
+    password VARCHAR(100) NOT NULL COMMENT '密码（MD5加密）',
+    email VARCHAR(100) COMMENT '邮箱',
+    phone VARCHAR(20) COMMENT '电话',
+    role ENUM('admin', 'user') DEFAULT 'user' COMMENT '角色：admin管理员，user普通用户',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_username (username),
+    INDEX idx_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- 3. 房屋表
+CREATE TABLE houses (
+    house_id VARCHAR(20) PRIMARY KEY COMMENT '房屋编号',
+    address VARCHAR(200) NOT NULL COMMENT '地址',
+    area DECIMAL(10,2) NOT NULL COMMENT '面积(㎡)',
+    bedrooms INT NOT NULL COMMENT '卧室数量',
+    rent DECIMAL(10,2) NOT NULL COMMENT '月租金(元)',
+    status ENUM('vacant', 'rented') DEFAULT 'vacant' COMMENT '状态：vacant空置，rented已租',
+    description TEXT COMMENT '房屋描述',
+    owner_id INT COMMENT '业主ID（如果有）',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_status (status),
+    INDEX idx_rent (rent),
+    INDEX idx_address (address(50)),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房屋表';
+
+-- 4. 租客信息表
+CREATE TABLE tenants (
+    tenant_id VARCHAR(20) PRIMARY KEY COMMENT '租客编号',
+    name VARCHAR(100) NOT NULL COMMENT '姓名',
+    phone VARCHAR(20) NOT NULL COMMENT '联系电话',
+    id_card VARCHAR(18) UNIQUE NOT NULL COMMENT '身份证号',
+    work_place VARCHAR(200) COMMENT '工作单位',
+    email VARCHAR(100) COMMENT '邮箱',
+    user_id INT COMMENT '关联的用户ID',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_name (name),
+    INDEX idx_phone (phone),
+    INDEX idx_id_card (id_card),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租客信息表';
+
+-- 5. 租赁合同表
+CREATE TABLE contracts (
+    contract_id VARCHAR(20) PRIMARY KEY COMMENT '合同编号',
+    house_id VARCHAR(20) NOT NULL COMMENT '房屋编号',
+    tenant_id VARCHAR(20) NOT NULL COMMENT '租客编号',
+    start_date DATE NOT NULL COMMENT '开始日期',
+    end_date DATE NOT NULL COMMENT '结束日期',
+    deposit DECIMAL(10,2) NOT NULL COMMENT '押金(元)',
+    rent DECIMAL(10,2) NOT NULL COMMENT '月租金(元)',
+    status ENUM('active', 'terminated', 'expired') DEFAULT 'active' COMMENT '状态：active有效，terminated终止，expired过期',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_status (status),
+    INDEX idx_house_id (house_id),
+    INDEX idx_tenant_id (tenant_id),
+    INDEX idx_date_range (start_date, end_date),
+    FOREIGN KEY (house_id) REFERENCES houses(house_id) ON DELETE CASCADE,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='租赁合同表';
+
+-- 6. 插入默认管理员账户
+-- 密码：admin123 的MD5值：21232f297a57a5a743894a0e4a801fc3
+INSERT INTO users (username, password, email, role) VALUES 
+('admin', '21232f297a57a5a743894a0e4a801fc3', 'admin@rental.com', 'admin');
+
+-- 7. 插入示例租客账户
+-- 密码：user123 的MD5值：ee11cbb19052e40b07aac0ca060c23ee
+INSERT INTO users (username, password, email, phone, role) VALUES 
+('zhangsan', 'ee11cbb19052e40b07aac0ca060c23ee', 'zhangsan@email.com', '13800138000', 'user'),
+('lisi', 'ee11cbb19052e40b07aac0ca060c23ee', 'lisi@email.com', '13900139000', 'user');
+
+-- 8. 插入示例房屋数据
+INSERT INTO houses (house_id, address, area, bedrooms, rent, status, description) VALUES
+('H001', '北京市海淀区中关村大街1号', 85.5, 2, 4500.00, 'vacant', '交通便利，靠近地铁站，精装修，家具齐全'),
+('H002', '上海市浦东新区陆家嘴路100号', 120.0, 3, 8000.00, 'vacant', '豪华装修，视野开阔，江景房，配套设施完善'),
+('H003', '广州市天河区体育西路50号', 65.0, 1, 3200.00, 'rented', '单身公寓，配套齐全，拎包入住，交通方便'),
+('H004', '深圳市南山区科技园路88号', 95.0, 2, 5500.00, 'vacant', '精装修，拎包入住，周边配套设施完善'),
+('H005', '杭州市西湖区文三路200号', 75.0, 2, 3800.00, 'vacant', '学区房，环境优美，适合家庭居住'),
+('H006', '成都市锦江区春熙路50号', 88.0, 2, 4200.00, 'vacant', '商业中心，交通便利，生活方便');
+
+-- 9. 插入示例租客信息
+INSERT INTO tenants (tenant_id, name, phone, id_card, work_place, email, user_id) VALUES
+('T001', '张三', '13800138000', '110101199001011234', '阿里巴巴公司', 'zhangsan@email.com', 
+ (SELECT id FROM users WHERE username = 'zhangsan')),
+('T002', '李四', '13900139000', '110101199102022345', '腾讯科技', 'lisi@email.com',
+ (SELECT id FROM users WHERE username = 'lisi')),
+('T003', '王五', '13700137000', '110101199203033456', '百度公司', 'wangwu@email.com', NULL),
+('T004', '赵六', '13600136000', '110101199304044567', '华为技术', 'zhaoliu@email.com', NULL);
+
+-- 10. 插入示例合同数据
+INSERT INTO contracts (contract_id, house_id, tenant_id, start_date, end_date, deposit, rent, status) VALUES
+('C001', 'H003', 'T001', '2024-01-01', '2024-12-31', 9000.00, 3200.00, 'active'),
+('C002', 'H006', 'T002', '2024-03-01', '2025-02-28', 8400.00, 4200.00, 'active'),
+('C003', 'H001', 'T003', '2023-06-01', '2024-05-31', 9000.00, 4500.00, 'terminated');
+
+-- 11. 更新房屋状态（根据合同状态）
+UPDATE houses SET status = 'rented' WHERE house_id IN 
+(SELECT house_id FROM contracts WHERE status = 'active');
+
+-- 12. 创建视图（方便查询）
+CREATE VIEW house_contract_view AS
+SELECT 
+    h.house_id,
+    h.address,
+    h.area,
+    h.bedrooms,
+    h.rent AS house_rent,
+    h.status AS house_status,
+    c.contract_id,
+    c.start_date,
+    c.end_date,
+    c.deposit,
+    c.rent AS contract_rent,
+    c.status AS contract_status,
+    t.name AS tenant_name,
+    t.phone AS tenant_phone
+FROM houses h
+LEFT JOIN contracts c ON h.house_id = c.house_id AND c.status = 'active'
+LEFT JOIN tenants t ON c.tenant_id = t.tenant_id;
+
+-- 13. 创建存储过程（获取房屋统计信息）
+DELIMITER //
+CREATE PROCEDURE get_house_statistics()
+BEGIN
+    SELECT 
+        COUNT(*) as total_houses,
+        SUM(CASE WHEN status = 'vacant' THEN 1 ELSE 0 END) as vacant_houses,
+        SUM(CASE WHEN status = 'rented' THEN 1 ELSE 0 END) as rented_houses,
+        AVG(rent) as avg_rent,
+        MIN(rent) as min_rent,
+        MAX(rent) as max_rent
+    FROM houses;
+END //
+DELIMITER ;
+
+-- 14. 创建触发器（创建合同时自动更新房屋状态）
+DELIMITER //
+CREATE TRIGGER update_house_status_on_contract_insert
+AFTER INSERT ON contracts
+FOR EACH ROW
+BEGIN
+    UPDATE houses SET status = 'rented' WHERE house_id = NEW.house_id;
+END //
+DELIMITER ;
+
+-- 15. 创建触发器（终止合同时自动更新房屋状态）
+DELIMITER //
+CREATE TRIGGER update_house_status_on_contract_terminate
+AFTER UPDATE ON contracts
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'terminated' AND OLD.status = 'active' THEN
+        UPDATE houses SET status = 'vacant' WHERE house_id = NEW.house_id;
+    END IF;
+END //
+DELIMITER ;
